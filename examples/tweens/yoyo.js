@@ -17,6 +17,11 @@ function create() {
     sprite.anchor.setTo(0.5, 0.5);
     sprite.alpha = 0;
 
-    game.add.tween(sprite).to( { alpha: 1 }, 2000, Phaser.Easing.Linear.None, true, 0, 1000, true);
+    //  Create our tween. This will fade the sprite to alpha 1 over the duration of 2 seconds
+    var tween = game.add.tween(sprite).to( { alpha: 1 }, 2000, "Linear", true, 0, -1);
+
+    //  And this tells it to yoyo, i.e. fade back to zero again before repeating.
+    //  The 3000 tells it to wait for 3 seconds before starting the fade back.
+    tween.yoyo(true, 3000);
 
 }

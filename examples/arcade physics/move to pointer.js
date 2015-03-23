@@ -1,8 +1,10 @@
 
-var game = new Phaser.Game(800, 600, Phaser.AUTO, 'phaser-example', { preload: preload, create: create, update: update });
+// var game = new Phaser.Game(800, 600, Phaser.AUTO, 'phaser-example', { preload: preload, create: create, update: update });
+var game = new Phaser.Game(800, 600, Phaser.CANVAS, 'phaser-example', { preload: preload, create: create, update: update, render: render });
 
 function preload() {
 
+    game.load.image('backdrop', 'assets/pics/remember-me.jpg');
     game.load.image('ball', 'assets/sprites/shinyball.png');
 
 }
@@ -13,26 +15,35 @@ function create() {
 
     game.physics.startSystem(Phaser.Physics.ARCADE);
 
+    game.world.setBounds(0, 0, 1920, 1200);
+
+    game.add.sprite(0, 0, 'backdrop');
+
     ball = game.add.sprite(game.world.randomX, 200, 'ball');
 
     game.physics.arcade.enable(ball);
 
-    game.physics.arcade.gravity.y = 200;
-
-    ball.body.velocity.set(200, 200);
-    ball.body.bounce.set(1, 1);
-    ball.body.collideWorldBounds = true;
+    game.camera.follow(ball);
 
     game.input.onDown.add(moveBall, this);
 
 }
 
-function update() {
+function moveBall() {
+
+    //  If we don't it'll look very wrong
+    game.camera.follow();
+
+    game.physics.arcade.moveToPointer(ball, 100);
+
+    //  The maxTime parameter lets you control how fast it will arrive at the Pointer coords
+    // game.physics.arcade.moveToPointer(ball, 100, game.input.activePointer, 1000);
+
+
 }
 
-function moveBall(pointer) {
+function render() {
 
-    ball.x = pointer.x;
-    ball.y = pointer.y;
+    game.debug.text("distance: " + game.physics.arcade.distanceToPointer(ball), 32, 32);
 
 }

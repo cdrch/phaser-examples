@@ -1,256 +1,319 @@
 <?php
-    $files = dirToArray(dirname(__FILE__));
-    $total = 0;
+    $png = '';
+    $filename = '';
+    $current = false;
+    $title = 'Index';
 
-    foreach ($files as $key => $value)
+    if (isset($_GET['s']) && $_GET['s'] !== '')
     {
-        if (is_array($value) && count($value) > 0)
-        {
-            $total += count($value);
-        }
+        $current = $_GET['s'];
+        $title = ucfirst($current);
+    }
+    
+    if (isset($_GET['f']) && $_GET['f'] !== '')
+    {
+        $filename = $_GET['f'];
+        $png = str_replace('.js', '.png', $filename);
+        $png = str_replace('/', '_', $png);
+        $title = $filename;
     }
 
-    function dirToArray($dir) { 
+    $ignore = array('_site', 'assets', 'states', 'book', '_plugins');
 
-        $ignore = array('.', '..', '_site', 'assets', 'states', 'book', 'wip');
-        $result = array(); 
-        $root = scandir($dir); 
-        $dirs = array_diff($root, $ignore);
+    $path = realpath(dirname(__FILE__));
 
-        foreach ($dirs as $key => $value) 
-        { 
-            if (is_dir($dir . DIRECTORY_SEPARATOR . $value)) 
-            { 
-                $result[$value] = dirToArray($dir . DIRECTORY_SEPARATOR . $value); 
-            } 
-            else 
-            {
-                if (substr($value, -3) == '.js')
-                {
-                    $result[] = $value; 
-                }
-            } 
-        } 
+    //  http://uk1.php.net/manual/en/class.splfileinfo.php
 
-        return $result; 
-    } 
+    $directory = new RecursiveDirectoryIterator($path);
+    $filter = new RecursiveCallbackFilterIterator($directory, function ($current, $key, $iterator) {
 
-    function buildSelectList($section) {
+        global $ignore;
 
-        global $files;
-
-        if ($section == false)
+        if ($current->isDir())
         {
-            $output = "";
+            $name = $current->getBasename();
+            $path = $current->getPath();
+
+            if ($name === 'wip')
+            {
+                return true;
+            }
+            else if (strpos($path, 'wip'))
+            {
+                return false;
+            }
+            else
+            {
+                return (array_search($current->getBasename(), $ignore) === false);
+            }
         }
         else
         {
-            $output = "        <select id=\"filelist\">";
+            return ($current->getType() === 'file' && $current->getExtension() === 'js');
         }
 
-        if ($section)
-        {
-            $tempFiles = $files[$section];
-        }
-        else
-        {
-            $tempFiles = $files;
-        }
+        return false;
 
-        foreach ($tempFiles as $key => $value)
+    });
+
+    $iterator = new RecursiveIteratorIterator($filter);
+
+    $examples = [];
+    $previous = '';
+
+    foreach ($iterator as $info)
+    {
+        $section = $info->getPathInfo()->getBasename();
+
+        if ($section !== $previous)
         {
-            if (is_array($value)) 
+            $examples[$section] = [];
+            $previous = $section;
+
+            if (count($examples[$section]) > 0)
             {
-                $output .= "<optgroup label=\"$key\">";
-                $output .= buildSelectList($key);
-                $output .= "</optgroup>";
-            } 
-            else 
-            {
-                $value2 = substr($value, 0, -3);
-                $file = urlencode($value);
-                $output .= "<option value=\"$section/$file\">$value2</option>";
-            } 
+                sort($examples[$section]);
+            }
         }
 
-        if ($section == false)
-        {
-            $output = "";
-        }
-        else
-        {
-            $output = "        </select>";
-        }
-
-        return $output;
+        $examples[$section][] = $info->getBasename();
 
     }
 
-    function buildList($section) {
+    $modules = array(
+        'debug' => true,
+        'keyboard' => true,
+        'gamepad' => true,
+        'bitmapdata' => true,
+        'graphics' => true,
+        'rendertexture' => true,
+        'text' => true,
+        'bitmaptext' => true,
+        'retrofont' => true,
+        'tweens' => true,
+        'sound' => true,
+        'particles' => true,
+        'tilemap' => true,
+        'arcade' => true,
+        'p2' => true,
+        'ninja' => false,
+        'box2d' => false
+    );
 
-        global $files;
-
-        $output = "";
-
-        if ($section)
+    foreach ($modules as $module => $modset)
+    {
+        if (isset($_COOKIE[$module]))
         {
-            $tempFiles = $files[$section];
-        }
-        else
-        {
-            $tempFiles = $files;
-        }
-
-        $ignore = array('dragonBones.js' => false, 'phaser_dragonbones.js' => false);
-
-        foreach ($tempFiles as $key => $value)
-        {
-            if (is_array($value)) 
+            if ($_COOKIE[$module] === 'true')
             {
-                $output .= "<div class=\"section\">";
-                $output .= "<h2>$key</h2>";
-                $output .= buildList($key);
-                $output .= "</div>";
-            } 
-            else 
+                $modules[$module] = true;
+            }
+            else if ($_COOKIE[$module] === 'false')
             {
-                $value2 = substr($value, 0, -3);
-                $file = urlencode($value);
-
-                if (!array_key_exists($value, $ignore))
-                {
-                    $output .= "<div class=\"item\"><a href=\"debug.php?f=$section/$file\">$value2</a></div>";
-                }
-            } 
+                $modules[$module] = false;
+            }
         }
+    }
 
-        return $output;
+    $dist = 'php';
 
+    if (isset($_COOKIE['dist']) && $_COOKIE['dist'] === 'js')
+    {
+        $dist = 'js';
     }
 ?>
 <!doctype html>
 <html>
     <head>
         <meta charset="UTF-8" />
-        <title>phaser</title>
+        <title>Phaser Examples - <?php echo $title ?></title>
         <script src="_site/js/jquery-2.0.3.min.js" type="text/javascript"></script>
-        <!-- <meta name="viewport" content="initial-scale=1 maximum-scale=1 user-scalable=0 minimal-ui" /> -->
+        <script src="_site/js/jquery.cookie.js" type="text/javascript"></script>
+        <script src="_site/js/Blob.js" type="text/javascript"></script>
+        <script src="_site/js/CanvasToBlob.js" type="text/javascript"></script>
+        <script src="_site/js/FileSaver.js" type="text/javascript"></script>
+        <link rel="stylesheet" type="text/css" href="_site/css/debug.css" />
+        <link href="http://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet" type="text/css">
         <?php
-            $v = "2.1.0";
-
-            if (isset($_GET['phaser']))
+            if ($dist === 'php' && ($_SERVER['SERVER_NAME'] == '192.168.0.100' || $_SERVER['SERVER_NAME'] == 'localhost'))
             {
-                echo "<script src=\"_site/phaser/phaser.{$_GET['phaser']}.min.js\" type=\"text/javascript\"></script>";
+                $path = '../../phaser';
+                require('../../phaser/build/config.php');
             }
             else
             {
-                if (($_SERVER['SERVER_NAME'] == '192.168.0.100' || $_SERVER['SERVER_NAME'] == 'localhost'))
-                {
-                    $path = '../../phaser';
-                    require('../../phaser/build/config.php');
-                }
-                else
-                {
-                    echo "<script src=\"_site/phaser/phaser.{$v}.min.js\" type=\"text/javascript\"></script>";
-                }
+                echo "<script src=\"_site/phaser/phaser.2.2.2.min.js\" type=\"text/javascript\"></script>";
+            }
+
+            if ($modules['box2d'])
+            {
+            echo "<script src=\"/phaser-box2d/src/box2d/box2d-html5.js\" type=\"text/javascript\"></script>";
+            echo "<script src=\"/phaser-box2d/src/plugin/World.js\" type=\"text/javascript\"></script>";
+            echo "<script src=\"/phaser-box2d/src/plugin/Body.js\" type=\"text/javascript\"></script>";
+            echo "<script src=\"/phaser-box2d/src/plugin/PointProxy.js\" type=\"text/javascript\"></script>";
+            echo "<script src=\"/phaser-box2d/src/plugin/DefaultDebugDraw.js\" type=\"text/javascript\"></script>";
+            echo "<script src=\"/phaser-box2d/src/plugin/DefaultContactListener.js\" type=\"text/javascript\"></script>";
+            echo "<script src=\"/phaser-box2d/src/plugin/Polygon.js\" type=\"text/javascript\"></script>";
             }
         ?>
         <style>
-            body {
-                font-family: Arial;
-                font-size: 14px;
-            }
-
-            a {
-                color: #0000ff;
-                text-decoration: none;
-            }
-
-            a:Hover {
-                color: #ff0000;
-                text-decoration: underline;
-            }
-
-            input {
-                font-size: 18px;
-            }
-
-            h2 {
-                padding: 0;
-                margin: 8px 0px;
-            }
-
-            .section {
-                padding: 16px;
-                clear: both;
-            }
-
-            .section .item {
-                float: left;
-                padding: 8px;
-            }
         </style>
     </head>
     <body>
 
         <div id="phaser-example"></div>
 
-        <input type="button" id="start" value="start" />
-        <input type="button" id="stop" value="stop" style="margin-left: 32px" />
-        <input type="button" id="step" value="step" style="margin-left: 128px"/>
-        <input type="button" id="fs" value="fullscreen" style="margin-left: 128px"/>
+        <div id="options">
 
+            <div id="optionsForm" class="modform">
         <?php
-            echo buildList(false);
+            foreach ($modules as $module => $modset)
+            {
+                $c = '';
+
+                if ($modset)
+                {
+                    $c = 'checked="checked"';
+                }
+
+                if ($dist === 'js')
+                {
+                    $c = 'disabled="disabled"';
+                }
         ?>
+                <div class="modopt">
+                    <input type="checkbox" id="<?php echo $module ?>" value="<?php echo $module ?>" <?php echo $c ?> />
+                    <label for="<?php echo $module ?>"><?php echo $module ?></label>
+                </div>
+        <?php
+            }
+        ?>
+            </div>
+
+            <div id="controls">
+
+                <hr />
+
+                <input type="button" id="start" value="start" class="mini" />
+                <input type="button" id="stop" value="stop" class="mini" />
+                <input type="button" id="step" value="step" class="mini" />
+
+                <hr />
+
+                <?php
+                    if ($dist === 'php')
+                    {
+                ?>
+                <input type="button" id="dist" value="phaser.js" />
+                <?php
+                    }
+                    else
+                    {
+                ?>
+                <input type="button" id="dist" value="config.php" />
+                <?php
+                    }
+                ?>
+
+                <input type="button" id="fs" value="fullscreen" />
+                <input type="button" id="grab" value="screen grab (g)" />
+
+                <p>Module Sets:</p>
+
+                <input type="button" id="defcon1" value="default" />
+                <input type="button" id="defcon2" value="arcade physics" />
+                <input type="button" id="defcon3" value="no physics" />
+                <input type="button" id="defcon4" value="minimum" />
+
+                <input type="button" id="optionsSubmit" value="Reload" />
+
+            </div>
+
+        </div>
+
+        <section>
+
+            <div class="clr">
+            <?php
+                if ($current)
+                {
+                ?>
+                    <div style="display: inline-block; margin: 16px">
+                        <div class="exampleTotal"><?php echo count($examples[$current]) ?></div>
+                        <a class="example selected" href="debug.php?s=<?php echo $current ?>"><?php echo $current ?></a>
+                    </div>
+
+                    <div id="examples">
+                <?php
+                    foreach ($examples[$current] as $category => $item)
+                    {
+                        $fcheck = $current . '/' . $item;
+                        $url = "debug.php?s=$current&amp;f=$current/$item";
+                        $item = substr($item, 0, -3);
+
+                        if ($fcheck === $filename)
+                        {
+                            echo "<a href=\"$url\" class=\"selected\">$item</a>";
+                        }
+                        else
+                        {
+                            echo "<a href=\"$url\">$item</a>";
+                        }
+                    }
+                ?>
+                    </div>
+                <?php
+                }
+
+                $total = 0;
+                $keys = array_keys($examples);
+
+                foreach ($keys as $key)
+                {
+                    $total += count($examples[$key]);
+
+                    if ($current === $key)
+                    {
+                        continue;
+                    }
+                ?>
+                <div style="display: inline-block; margin: 16px">
+                    <div class="exampleTotal"><?php echo count($examples[$key]) ?></div>
+                    <a class="example" href="debug.php?s=<?php echo $key ?>"><?php echo $key ?></a>
+                </div>
+                <?php
+                }
+                ?>
+            </div>
+
+
+        </section>
+
+        <div id="footer"><?php echo $total ?> Examples - @photonstorm</div>
 
         <script type="text/javascript">
             
-            $("#filelist").change(function() {
-                window.location.href = 'debug.php?f=' + $("#filelist").val();
-            });
-
-            var debugSprite = null;
-
             <?php
-                if (isset($_GET['f']))
+                if ($filename !== '')
                 {
-                    $src = file_get_contents($_GET['f']);
+                    $src = file_get_contents($filename);
                     echo $src;
                 }
             ?>
 
             $('#step').click(function(){
-                console.log('---- STEP', game.stepCount, '-------------------------------');
                 game.step();
             });
 
             $('#start').click(function(){
-                console.log('---- START DEBUGGING -------------------------------');
-
                 game.enableStep();
-
-                if (debugSprite)
-                {
-                    debugSprite.debug = true;
-                }
             });
 
             $('#stop').click(function(){
-                console.log('---- STOP DEBUGGING -------------------------------');
-
                 game.disableStep();
-
-                if (debugSprite)
-                {
-                    debugSprite.debug = false;
-                }
             });
 
             $('#fs').click(function(){
-
-                console.log('---- FULL SCREEN -------------------------------');
-            
                 if (game.scale.isFullScreen)
                 {
                     game.scale.stopFullScreen();
@@ -259,6 +322,141 @@
                 {
                     game.scale.startFullScreen(false);
                 }
+            });
+
+            $(window).keydown(function(event) {
+
+                //  Press G to capture
+                if (event.which === 71)
+                {
+                    game.canvas.toBlob(function(blob) {
+                        saveAs(blob, "<?php echo $png ?>");
+                    });
+                }
+
+            });
+
+            $('#grab').click(function(){
+
+                game.canvas.toBlob(function(blob) {
+                    saveAs(blob, "<?php echo $png ?>");
+                });
+
+            });
+
+            $('#optionsSubmit').click(function(){
+
+                saveCookies();
+                window.location.reload();
+
+            });
+
+            <?php
+                $modlist = 'var modules = [';
+
+                foreach ($modules as $module => $modset)
+                {
+                    $modlist .= "'$module', ";
+                }
+
+                $modlist = substr($modlist, 0, -2);
+                $modlist .= '];';
+
+                echo $modlist;
+
+            ?>
+
+            $("#dist").click(function() {
+
+                console.log($(this).prop('value'));
+
+                if ($(this).prop('value') === 'phaser.js')
+                {
+                    //  swap to pre-built package
+                    $.cookie('dist', 'js', { expires: 7 });
+                }
+                else
+                {
+                    //  swap to PHP build
+                    $.cookie('dist', 'php', { expires: 7 });
+                }
+
+                window.location.reload();
+
+            });
+
+            function saveCookies() {
+
+                for (var i = 0; i < modules.length; i++)
+                {
+                    $.cookie(modules[i], $('#' + modules[i]).prop('checked'), { expires: 7 });
+                }
+
+            }
+
+            $("#optionsForm input[type='checkbox']").click(function() {
+                $.cookie(this.value, $(this).prop('checked'), { expires: 7 });
+            });
+
+            //   Default Module set
+            $('#defcon1').click(function(){
+
+                $("#optionsForm input[type='checkbox']").each(
+                    function() {
+                        $(this).prop('checked', true);
+                    }
+                );
+                
+                $('#ninja').prop('checked', false);
+                $('#box2d').prop('checked', false);
+                saveCookies();
+
+            });
+
+            //   Arcade Physics Module set
+            $('#defcon2').click(function(){
+
+                $("#optionsForm input[type='checkbox']").each(
+                    function() {
+                        $(this).prop('checked', true);
+                    }
+                );
+                
+                $('#p2').prop('checked', false);
+                $('#ninja').prop('checked', false);
+                $('#box2d').prop('checked', false);
+                saveCookies();
+
+            });
+
+            //   No Physics Module set
+            $('#defcon3').click(function(){
+
+                $("#optionsForm input[type='checkbox']").each(
+                    function() {
+                        $(this).prop('checked', true);
+                    }
+                );
+                
+                $('#arcade').prop('checked', false);
+                $('#tilemap').prop('checked', false);
+                $('#particles').prop('checked', false);
+                $('#p2').prop('checked', false);
+                $('#ninja').prop('checked', false);
+                $('#box2d').prop('checked', false);
+                saveCookies();
+
+            });
+
+            //   Minimum Module set
+            $('#defcon4').click(function(){
+
+                $("#optionsForm input[type='checkbox']").each(
+                    function() {
+                        $(this).prop('checked', false);
+                    }
+                );
+                saveCookies();
 
             });
 
